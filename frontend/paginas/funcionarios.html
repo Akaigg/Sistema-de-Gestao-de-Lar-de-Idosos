@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Funcionários — Cuidar+</title>
+  <link rel="stylesheet" href="/estatico/css/design-system.css">
+  <link rel="stylesheet" href="/estatico/css/layout.css">
+</head>
+<body>
+  <div id="raiz"></div>
+  <script type="module">
+    import { Api } from "/estatico/js/api.js";
+    import { montarLayout, notificar, escaparHTML, abrirModal, formatarData } from "/estatico/js/comum.js";
+
+    const area = montarLayout({ idPaginaAtiva: "funcionarios", titulo: "Funcionários", subtitulo: "Equipe do lar (apenas admin)" });
+
+    const PAPEIS = [
+      ["administrador", "Administrador"],
+      ["medico", "Médico(a)"],
+      ["enfermeiro", "Enfermeiro(a)"],
+      ["cuidador", "Cuidador(a)"],
+      ["nutricionista", "Nutricionista"],
+      ["financeiro", "Financeiro"],
+      ["recepcao", "Recepção"],
+    ];
+
+    async function carregar() {
+      try {
+        const dados = await Api.get("/api/funcionarios", { apenas_ativos: false, tamanho_pagina: 200 });
+        area.innerHTML = `
+          <div class="cartao">
+            <div class="cartao__cabecalho">
+              <h3>Total: ${dados.total}</h3>
+              <button class="botao" id="btn-novo">+ Novo funcionário</button>
+            </div>
+            <table class="tabela">
+              <thead><tr><th>Nome</th><th>E-mail</th><th>Cargo</th><th>Papéis</th><th>Admissão</th><th>Status</th></tr></thead>
+              <tbody>${dados.itens.map(f => `
+                <tr>
+                  <td><strong>${escaparHTML(f.nome_completo)}</strong></td>
+                  <td>${escaparHTML(f.email)}</td>
+                  <td>${escaparHTML(f.cargo)}</td>
+                  <td>${f.papeis.map(p => `<span class="pilula">${p}</span>`).join(" ")}</td>
+                  <td>${formatarData(f.data_admissao)}</td>
+                  <td>${f.ativo ? '<span class="pilula pilula--sucesso">Ativo</span>' : '<span class="pilula pilula--neutra">Desligado</span>'}</td>
+                </tr>`).join("")}</tbody>
+            </table>
+          </div>
+        `;
+        document.getElementById("btn-novo").addEventListener("click", abrirNovo);
+      } catch (e) { notificar(e.message, "perigo"); }
+    }
+
+    async function abrirNovo() {
+      await abrirModal({
+        titulo: "Novo funcionário",
+        larguraGrande: true,
+        textoConfirmar: "Cadastrar",
+        conteudoHtml: `<form id="f">
+          <div class="grade grade-2">
+            <div class="campo"><label>Nome completo</label><input name="nome_completo" required></div>
+            <div class="campo"><label>E-mail</label><input name="email" type="email" required></div>
+            <div class="campo"><label>CPF</label><input name="cpf" required></div>
+            <div class="campo"><label>Cargo</label><input name="cargo" required></div>
+            <div class="campo"><label>Telefone</label><input name="telefone"></div>
+            <div class="campo"><label>Data de admissão</label><input name="data_admissao" type="date"></div>
+            <div class="campo"><label>Senha inicial</label><input name="senha_inicial" type="password" required minlength="8"></div>
+          </div>
+          <div class="campo">
+            <label>Papéis (selecione um ou mais)</label>
+            <div style="display:flex; flex-wrap:wrap; gap: var(--esp-3)">
+              ${PAPEIS.map(([v, r]) => `
+                <label style="display:flex; align-items:center; gap:6px">
+                  <input type="checkbox" name="papel" value="${v}"> ${r}
+                </label>
+              `).join("")}
+            </div>
+          </div>
+        </form>`,
+        aoConfirmar: async (f) => {
+          const form = f.querySelector("#f");
+          const dados = Object.fromEntries(new FormData(form));
+          const papeis = Array.from(form.querySelectorAll("[name=papel]:checked")).map(i => i.value);
+          if (papeis.length === 0) { notificar("Selecione ao menos um papel.", "aviso"); return false; }
+          dados.papeis = papeis;
+          if (!dados.data_admissao) delete dados.data_admissao;
+          try { await Api.post("/api/funcionarios", dados); notificar("Funcionário criado.", "sucesso"); carregar(); return true; }
+          catch (e) { notificar(e.message, "perigo"); return false; }
+        },
+      });
+    }
+
+    carregar();
+  </script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cuidar+ — Lar de Idosos</title>
+  <link rel="stylesheet" href="/estatico/css/design-system.css">
+  <style>
+    body { display: flex; justify-content: center; align-items: center; height: 100vh; }
+  </style>
+</head>
+<body>
+  <main style="text-align:center">
+    <div class="carregando" style="margin: 0 auto"></div>
+    <p style="margin-top: 1rem; color: var(--texto-secundario);">Redirecionando...</p>
+  </main>
+  <script type="module">
+    import { obterToken } from "/estatico/js/api.js";
+    if (obterToken()) {
+      window.location.href = "/paginas/dashboard.html";
+    } else {
+      window.location.href = "/login.html";
+    }
+  </script>
+</body>
+</html>

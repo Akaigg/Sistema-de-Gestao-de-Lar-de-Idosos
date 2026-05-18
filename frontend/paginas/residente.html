@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Detalhe do residente — Cuidar+</title>
+  <link rel="stylesheet" href="/estatico/css/design-system.css">
+  <link rel="stylesheet" href="/estatico/css/layout.css">
+  <style>
+    .abas { display: flex; gap: var(--esp-2); border-bottom: 1px solid var(--borda-padrao); margin-bottom: var(--esp-6); }
+    .aba { padding: 0.7rem 1rem; cursor: pointer; border-bottom: 3px solid transparent; color: var(--texto-secundario); font-weight: 600; }
+    .aba--ativa { color: var(--cor-primaria); border-color: var(--cor-primaria); }
+  </style>
+</head>
+<body>
+  <div id="raiz"></div>
+  <script type="module">
+    import { Api } from "/estatico/js/api.js";
+    import { montarLayout, notificar, formatarData, formatarDataHora, escaparHTML, abrirModal } from "/estatico/js/comum.js";
+
+    const params = new URLSearchParams(window.location.search);
+    const residenteId = parseInt(params.get("id"), 10);
+    if (!residenteId) { window.location.href = "/paginas/residentes.html"; }
+
+    const area = montarLayout({ idPaginaAtiva: "residentes", titulo: "Residente", subtitulo: "Detalhes e prontuário" });
+
+    let abaAtual = "cadastro";
+    let residente = null;
+
+    async function carregar() {
+      try {
+        residente = await Api.get(`/api/residentes/${residenteId}`);
+      } catch (erro) {
+        notificar(erro.message, "perigo");
+        return;
+      }
+      area.innerHTML = `
+        <div class="cartao" style="margin-bottom: var(--esp-6)">
+          <div class="cartao__cabecalho">
+            <div>
+              <h2 style="margin:0">${escaparHTML(residente.nome_completo)}</h2>
+              <p style="margin:0; color: var(--texto-suave)">${residente.idade} anos · ${escaparHTML(residente.cpf)} · ${residente.sexo}</p>
+            </div>
+            <span class="pilula pilula--info">${escaparHTML(residente.status)}</span>
+          </div>
+        </div>
+        <div class="abas" id="abas">
+          ${abaItem("cadastro", "Cadastro")}
+          ${abaItem("prontuario", "Prontuário")}
+          ${abaItem("medicacao", "Medicação")}
+          ${abaItem("responsaveis", "Responsáveis")}
+          ${abaItem("alimentacao", "Nutrição")}
+        </div>
+        <div id="conteudo-aba"></div>
+      `;
+      document.querySelectorAll(".aba").forEach(el => {
+        el.addEventListener("click", () => { abaAtual = el.dataset.aba; carregar(); });
+      });
+      renderizarAba();
+    }
+
+    function abaItem(id, rotulo) {
+      return `<div class="aba ${abaAtual === id ? "aba--ativa" : ""}" data-aba="${id}">${rotulo}</div>`;
+    }
+
+    async function renderizarAba() {
+      const conteudo = document.getElementById("conteudo-aba");
+      conteudo.innerHTML = '<div class="carregando"></div>';
+      if (abaAtual === "cadastro") aba_cadastro(conteudo);
+      else if (abaAtual === "prontuario") await aba_prontuario(conteudo);
+      else if (abaAtual === "medicacao") await aba_medicacao(conteudo);
+      else if (abaAtual === "responsaveis") await aba_responsaveis(conteudo);
+      else if (abaAtual === "alimentacao") await aba_alimentacao(conteudo);
+    }
+
+    function aba_cadastro(conteudo) {
+      conteudo.innerHTML = `
+        <div class="cartao">
+          <div class="grade grade-2">
+            ${linha("Nome completo", residente.nome_completo)}
+            ${linha("Data de nascimento", formatarData(residente.data_nascimento))}
+            ${linha("Idade", residente.idade + " anos")}
+            ${linha("CPF", residente.cpf)}
+            ${linha("Sexo", residente.sexo)}
+            ${linha("Data de entrada", formatarData(residente.data_entrada))}
+            ${linha("Grau de dependência", residente.grau_dependencia)}
+            ${linha("RG", residente.rg)}
+            ${linha("Cartão SUS", residente.cartao_sus)}
+            ${linha("Convênio", residente.convenio)}
+            ${linha("Naturalidade", residente.naturalidade)}
+            ${linha("Estado civil", residente.estado_civil)}
+            ${linha("Religião", residente.religiao)}
+            ${linha("Profissão anterior", residente.profissao_anterior)}
+          </div>
+          ${residente.observacoes ? `<div style="margin-top: var(--esp-4)"><strong>Observações:</strong><br>${escaparHTML(residente.observacoes)}</div>` : ""}
+        </div>
+      `;
+    }
+
+    function linha(rotulo, valor) {
+      return `
+        <div>
+          <div class="rotulo-indicador">${rotulo}</div>
+          <div style="font-weight: 500">${escaparHTML(valor || "—")}</div>
+        </div>`;
+    }
+
+    async function aba_prontuario(conteudo) {
+      const [sinais, evolucoes, alergias, condicoes] = await Promise.all([
+        Api.get(`/api/prontuario/sinais-vitais/residente/${residenteId}`),
+        Api.get(`/api/prontuario/evolucoes/residente/${residenteId}`),
+        Api.get(`/api/prontuario/alergias/residente/${residenteId}`),
+        Api.get(`/api/prontuario/condicoes/residente/${residenteId}`),
+      ]);
+      conteudo.innerHTML = `
+        <div class="grade grade-2">
+          <div class="cartao">
+            <div class="cartao__cabecalho">
+              <h3>Sinais vitais (últimos)</h3>
+              <button class="botao botao--pequeno" id="btn-sinais">+ Aferir</button>
+            </div>
+            ${sinais.length === 0 ? "<p>Nenhum registro.</p>" :
+              `<table class="tabela"><thead><tr><th>Data</th><th>PA</th><th>FC</th><th>Temp</th><th>SpO₂</th></tr></thead>
+              <tbody>${sinais.slice(0,8).map(s => `<tr>
+                <td>${formatarDataHora(s.aferido_em)}</td>
+                <td>${s.pressao_sistolica||"-"}/${s.pressao_diastolica||"-"}</td>
+                <td>${s.frequencia_cardiaca||"-"}</td>
+                <td>${s.temperatura||"-"} °C</td>
+                <td>${s.saturacao_oxigenio||"-"}%</td>
+              </tr>`).join("")}</tbody></table>`}
+          </div>
+          <div class="cartao">
+            <div class="cartao__cabecalho">
+              <h3>Evoluções recentes</h3>
+              <button class="botao botao--pequeno" id="btn-evolucao">+ Nova evolução</button>
+            </div>
+            ${evolucoes.length === 0 ? "<p>Nenhuma evolução.</p>" :
+              evolucoes.slice(0,5).map(e => `
+                <div style="border-left:3px solid var(--cor-primaria); padding-left: var(--esp-3); margin-bottom: var(--esp-3)">
+                  <strong>${escaparHTML(e.categoria)}</strong>
+                  <small style="color: var(--texto-suave)"> · ${formatarDataHora(e.registrada_em)}</small>
+                  <p style="margin: 0.25rem 0 0">${escaparHTML(e.texto)}</p>
+                </div>
+              `).join("")}
+          </div>
+          <div class="cartao">
+            <div class="cartao__cabecalho">
+              <h3>Alergias</h3>
+              <button class="botao botao--pequeno" id="btn-alergia">+ Adicionar</button>
+            </div>
+            ${alergias.length === 0 ? "<p>Sem alergias registradas.</p>" :
+              `<ul>${alergias.map(a => `<li><strong>${escaparHTML(a.substancia)}</strong> — ${escaparHTML(a.gravidade)} ${a.reacao?" — "+escaparHTML(a.reacao):""}</li>`).join("")}</ul>`}
+          </div>
+          <div class="cartao">
+            <div class="cartao__cabecalho">
+              <h3>Condições crônicas</h3>
+              <button class="botao botao--pequeno" id="btn-condicao">+ Adicionar</button>
+            </div>
+            ${condicoes.length === 0 ? "<p>Nenhuma condição registrada.</p>" :
+              `<ul>${condicoes.map(c => `<li><strong>${escaparHTML(c.descricao)}</strong>${c.cid10?" ("+c.cid10+")":""}</li>`).join("")}</ul>`}
+          </div>
+        </div>
+      `;
+
+      document.getElementById("btn-sinais").addEventListener("click", () => abrirModalSinais());
+      document.getElementById("btn-evolucao").addEventListener("click", () => abrirModalEvolucao());
+      document.getElementById("btn-alergia").addEventListener("click", () => abrirModalAlergia());
+      document.getElementById("btn-condicao").addEventListener("click", () => abrirModalCondicao());
+    }
+
+    async function abrirModalSinais() {
+      await abrirModal({
+        titulo: "Aferir sinais vitais",
+        textoConfirmar: "Registrar",
+        conteudoHtml: `<form id="f"><div class="grade grade-2">
+          <div class="campo"><label>PA sistólica</label><input name="pressao_sistolica" type="number"></div>
+          <div class="campo"><label>PA diastólica</label><input name="pressao_diastolica" type="number"></div>
+          <div class="campo"><label>FC (bpm)</label><input name="frequencia_cardiaca" type="number"></div>
+          <div class="campo"><label>FR (irpm)</label><input name="frequencia_respiratoria" type="number"></div>
+          <div class="campo"><label>Temperatura (°C)</label><input name="temperatura" type="number" step="0.1"></div>
+          <div class="campo"><label>SpO₂ (%)</label><input name="saturacao_oxigenio" type="number"></div>
+          <div class="campo"><label>Glicemia (mg/dL)</label><input name="glicemia" type="number"></div>
+          <div class="campo"><label>Peso (kg)</label><input name="peso" type="number" step="0.1"></div>
+        </div>
+        <div class="campo"><label>Observações</label><textarea name="observacoes"></textarea></div>
+        </form>`,
+        aoConfirmar: async (f) => {
+          const dados = Object.fromEntries(new FormData(f.querySelector("#f")));
+          dados.residente_id = residenteId;
+          ["pressao_sistolica","pressao_diastolica","frequencia_cardiaca","frequencia_respiratoria","saturacao_oxigenio","glicemia"]
+            .forEach(k => { if (dados[k]) dados[k] = parseInt(dados[k], 10); else delete dados[k]; });
+          ["temperatura","peso"].forEach(k => { if (dados[k]) dados[k] = parseFloat(dados[k]); else delete dados[k]; });
+          try { await Api.post("/api/prontuario/sinais-vitais", dados); notificar("Sinais registrados.", "sucesso"); renderizarAba(); return true; }
+          catch (e) { notificar(e.message, "perigo"); return false; }
+        },
+      });
+    }
+
+    async function abrirModalEvolucao() {
+      await abrirModal({
+        titulo: "Nova evolução",
+        textoConfirmar: "Registrar",
+        conteudoHtml: `<form id="f">
+          <div class="campo"><label>Categoria</label>
+            <select name="categoria">
+              <option value="enfermagem">Enfermagem</option>
+              <option value="medica">Médica</option>
+              <option value="fisioterapia">Fisioterapia</option>
+              <option value="psicologia">Psicologia</option>
+              <option value="nutricao">Nutrição</option>
+            </select>
+          </div>
+          <div class="campo"><label>Texto</label><textarea name="texto" rows="6" required></textarea></div>
+        </form>`,
+        aoConfirmar: async (f) => {
+          const dados = Object.fromEntries(new FormData(f.querySelector("#f")));
+          dados.residente_id = residenteId;
+          try { await Api.post("/api/prontuario/evolucoes", dados); notificar("Evolução registrada.", "sucesso"); renderizarAba(); return true; }
+          catch (e) { notificar(e.message, "perigo"); return false; }
+        },
+      });
+    }
+
+    async function abrirModalAlergia() {
+      await abrirModal({
+        titulo: "Nova alergia",
+        textoConfirmar: "Adicionar",
+        conteudoHtml: `<form id="f">
+          <div class="campo"><label>Substância</label><input name="substancia" required></div>
+          <div class="campo"><label>Reação</label><input name="reacao"></div>
+          <div class="campo"><label>Gravidade</label>
+            <select name="gravidade">
+              <option value="leve">Leve</option>
+              <option value="moderada">Moderada</option>
+              <option value="grave">Grave</option>
+            </select>
+          </div>
+        </form>`,
+        aoConfirmar: async (f) => {
+          const dados = Object.fromEntries(new FormData(f.querySelector("#f")));
+          dados.residente_id = residenteId;
+          try { await Api.post("/api/prontuario/alergias", dados); notificar("Alergia adicionada.", "sucesso"); renderizarAba(); return true; }
+          catch (e) { notificar(e.message, "perigo"); return false; }
+        },
+      });
+    }
+
+    async function abrirModalCondicao() {
+      await abrirModal({
+        titulo: "Condição crônica",
+        textoConfirmar: "Adicionar",
+        conteudoHtml: `<form id="f">
+          <div class="campo"><label>Descrição</label><input name="descricao" required placeholder="ex.: Hipertensão arterial sistêmica"></div>
+          <div class="campo"><label>CID-10</label><input name="cid10" placeholder="ex.: I10"></div>
+          <div class="campo"><label>Data do diagnóstico</label><input name="data_diagnostico" placeholder="ex.: 2020-03"></div>
+        </form>`,
+        aoConfirmar: async (f) => {
+          const dados = Object.fromEntries(new FormData(f.querySelector("#f")));
+          dados.residente_id = residenteId;
+          try { await Api.post("/api/prontuario/condicoes", dados); notificar("Condição registrada.", "sucesso"); renderizarAba(); return true; }
+          catch (e) { notificar(e.message, "perigo"); return false; }
+        },
+      });
+    }
+
+    async function aba_medicacao(conteudo) {
+      const prescricoes = await Api.get(`/api/medicacao/prescricoes/residente/${residenteId}`);
+      conteudo.innerHTML = `
+        <div class="cartao">
+          <div class="cartao__cabecalho">
+            <h3>Prescrições ativas</h3>
+            <a class="botao botao--pequeno" href="/paginas/medicacao.html">Abrir calendário</a>
+          </div>
+          ${prescricoes.length === 0 ? "<p>Nenhuma prescrição.</p>" : `
+            <table class="tabela">
+              <thead><tr><th>Med. ID</th><th>Dose</th><th>Via</th><th>Horários</th><th>Início</th><th>Duração</th><th>SOS</th></tr></thead>
+              <tbody>${prescricoes.map(p => `
+                <tr>
+                  <td>#${p.medicamento_id}</td>
+                  <td>${escaparHTML(p.dose)}</td>
+                  <td>${escaparHTML(p.via)}</td>
+                  <td>${p.horarios.join(", ")}</td>
+                  <td>${formatarData(p.data_inicio)}</td>
+                  <td>${p.duracao_dias ? p.duracao_dias + " dias" : "Contínuo"}</td>
+                  <td>${p.se_necessario ? "✓" : ""}</td>
+                </tr>`).join("")}</tbody>
+            </table>
+          `}
+        </div>
+      `;
+    }
+
+    async function aba_responsaveis(conteudo) {
+      const lista = await Api.get(`/api/residentes/${residenteId}/responsaveis`);
+      conteudo.innerHTML = `
+        <div class="cartao">
+          <div class="cartao__cabecalho">
+            <h3>Responsáveis / Familiares</h3>
+            <button class="botao botao--pequeno" id="btn-resp">+ Adicionar</button>
+          </div>
+          ${lista.length === 0 ? "<p>Nenhum responsável cadastrado.</p>" : `
+            <table class="tabela">
+              <thead><tr><th>Nome</th><th>Parentesco</th><th>Telefone</th><th>E-mail</th><th>Tipo</th></tr></thead>
+              <tbody>${lista.map(r => `
+                <tr>
+                  <td>${escaparHTML(r.nome_completo)}</td>
+                  <td>${escaparHTML(r.parentesco)}</td>
+                  <td>${escaparHTML(r.telefone)}</td>
+                  <td>${escaparHTML(r.email || "")}</td>
+                  <td>${r.eh_responsavel_legal ? '<span class="pilula pilula--info">Legal</span>' : '<span class="pilula">Contato</span>'}</td>
+                </tr>`).join("")}</tbody>
+            </table>
+          `}
+        </div>
+      `;
+      document.getElementById("btn-resp").addEventListener("click", abrirModalResponsavel);
+    }
+
+    async function abrirModalResponsavel() {
+      await abrirModal({
+        titulo: "Adicionar responsável",
+        textoConfirmar: "Adicionar",
+        conteudoHtml: `<form id="f">
+          <div class="grade grade-2">
+            <div class="campo"><label>Nome completo</label><input name="nome_completo" required></div>
+            <div class="campo"><label>CPF</label><input name="cpf" required></div>
+            <div class="campo"><label>Parentesco</label><input name="parentesco" required placeholder="Filho(a), cônjuge..."></div>
+            <div class="campo"><label>Telefone</label><input name="telefone" required></div>
+            <div class="campo"><label>E-mail</label><input name="email" type="email"></div>
+          </div>
+          <div class="campo campo--horizontal">
+            <input type="checkbox" name="eh_responsavel_legal" id="rl"><label for="rl">É responsável legal</label>
+          </div>
+        </form>`,
+        aoConfirmar: async (f) => {
+          const dados = Object.fromEntries(new FormData(f.querySelector("#f")));
+          dados.eh_responsavel_legal = f.querySelector("[name=eh_responsavel_legal]").checked;
+          try { await Api.post(`/api/residentes/${residenteId}/responsaveis`, dados); notificar("Responsável adicionado.", "sucesso"); renderizarAba(); return true; }
+          catch (e) { notificar(e.message, "perigo"); return false; }
+        },
+      });
+    }
+
+    async function aba_alimentacao(conteudo) {
+      const dietas = await Api.get(`/api/alimentacao/dietas/residente/${residenteId}`);
+      const hoje = new Date().toISOString().split("T")[0];
+      const total = await Api.get(`/api/alimentacao/hidratacao/residente/${residenteId}/total`, { dia: hoje });
+      conteudo.innerHTML = `
+        <div class="grade grade-2">
+          <div class="cartao">
+            <div class="cartao__cabecalho">
+              <h3>Dietas ativas</h3>
+              <button class="botao botao--pequeno" id="btn-dieta">+ Nova dieta</button>
+            </div>
+            ${dietas.length === 0 ? "<p>Sem dietas específicas.</p>" : `<ul>${dietas.map(d => `
+              <li><strong>${escaparHTML(d.tipo)}</strong> · desde ${formatarData(d.data_inicio)} ${d.descricao_detalhada ? "— "+escaparHTML(d.descricao_detalhada) : ""}</li>
+            `).join("")}</ul>`}
+          </div>
+          <div class="cartao">
+            <div class="cartao__cabecalho">
+              <h3>Hidratação hoje</h3>
+              <button class="botao botao--pequeno" id="btn-hidra">+ Registrar</button>
+            </div>
+            <div class="indicador">${total.total_ml} ml</div>
+            <p>Meta sugerida: 1500–2000 ml/dia</p>
+          </div>
+        </div>
+      `;
+      document.getElementById("btn-dieta").addEventListener("click", abrirModalDieta);
+      document.getElementById("btn-hidra").addEventListener("click", abrirModalHidratacao);
+    }
+
+    async function abrirModalDieta() {
+      await abrirModal({
+        titulo: "Nova dieta",
+        textoConfirmar: "Salvar",
+        conteudoHtml: `<form id="f">
+          <div class="campo"><label>Tipo</label>
+            <select name="tipo">
+              <option value="livre">Livre</option>
+              <option value="hipossodica">Hipossódica</option>
+              <option value="diabetica">Diabética</option>
+              <option value="pastosa">Pastosa</option>
+              <option value="liquida">Líquida</option>
+              <option value="enteral">Enteral</option>
+              <option value="sem_lactose">Sem lactose</option>
+              <option value="sem_gluten">Sem glúten</option>
+            </select>
+          </div>
+          <div class="campo"><label>Detalhes</label><textarea name="descricao_detalhada"></textarea></div>
+        </form>`,
+        aoConfirmar: async (f) => {
+          const dados = Object.fromEntries(new FormData(f.querySelector("#f")));
+          dados.residente_id = residenteId;
+          try { await Api.post("/api/alimentacao/dietas", dados); notificar("Dieta salva.", "sucesso"); renderizarAba(); return true; }
+          catch (e) { notificar(e.message, "perigo"); return false; }
+        },
+      });
+    }
+
+    async function abrirModalHidratacao() {
+      await abrirModal({
+        titulo: "Registrar hidratação",
+        textoConfirmar: "Registrar",
+        conteudoHtml: `<div class="campo"><label>Quantidade (ml)</label><input id="qtd" type="number" min="1" max="2000" value="200"></div>`,
+        aoConfirmar: async (f) => {
+          const qtd = parseInt(f.querySelector("#qtd").value, 10);
+          try { await Api.post("/api/alimentacao/hidratacao", { residente_id: residenteId, quantidade_ml: qtd }); notificar("Registrado.", "sucesso"); renderizarAba(); return true; }
+          catch (e) { notificar(e.message, "perigo"); return false; }
+        },
+      });
+    }
+
+    carregar();
+  </script>
+</body>
+</html>

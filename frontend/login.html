@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Entrar — Cuidar+</title>
+  <link rel="stylesheet" href="/estatico/css/design-system.css">
+  <link rel="stylesheet" href="/estatico/css/login.css">
+</head>
+<body>
+  <div class="tela-login">
+    <section class="tela-login__capa">
+      <div class="marca-grande">
+        <div class="icone">🤍</div>
+        <span>Cuidar+</span>
+      </div>
+      <div>
+        <h2>Cuidado integral, gestão simples.</h2>
+        <p>O Cuidar+ centraliza prontuários, medicação, escalas e finanças do seu lar de idosos
+           em uma única plataforma, criada para a equipe que cuida.</p>
+        <div class="destaque">
+          <div><strong>50+</strong><span>Funcionalidades</span></div>
+          <div><strong>RBAC</strong><span>Controle de acesso</span></div>
+          <div><strong>LGPD</strong><span>Privacidade</span></div>
+          <div><strong>SQLite</strong><span>100% local</span></div>
+        </div>
+      </div>
+      <small style="color: rgba(255,255,255,0.6)">© 2026 Cuidar+ · Uso interno</small>
+    </section>
+
+    <section class="tela-login__formulario">
+      <form class="formulario-login" id="formulario-login" autocomplete="off">
+        <h1>Acessar sistema</h1>
+        <p class="legenda">Apenas funcionários autorizados.</p>
+
+        <div class="campo">
+          <label for="email">E-mail corporativo</label>
+          <input id="email" name="email" type="email" required autocomplete="username"
+                 placeholder="seu.nome@cuidarmais.com.br">
+        </div>
+
+        <div class="campo">
+          <label for="senha">Senha</label>
+          <input id="senha" name="senha" type="password" required minlength="8"
+                 autocomplete="current-password" placeholder="••••••••">
+        </div>
+
+        <button type="submit" class="botao" id="btn-entrar">
+          <span id="rotulo-entrar">Entrar</span>
+        </button>
+
+        <p class="rodape-login">
+          Esqueceu sua senha? Solicite ao administrador.
+        </p>
+      </form>
+    </section>
+  </div>
+
+  <script type="module">
+    import { Api, salvarSessao, obterToken } from "/estatico/js/api.js";
+    import { notificar, aplicarTemaSalvo } from "/estatico/js/comum.js";
+    aplicarTemaSalvo();
+
+    if (obterToken()) window.location.href = "/paginas/dashboard.html";
+
+    const form = document.getElementById("formulario-login");
+    form.addEventListener("submit", async (evento) => {
+      evento.preventDefault();
+      const dados = new FormData(form);
+      const botao = document.getElementById("btn-entrar");
+      const rotulo = document.getElementById("rotulo-entrar");
+      botao.disabled = true;
+      rotulo.innerHTML = '<span class="carregando" style="border-top-color: white"></span>';
+      try {
+        const resposta = await Api.post("/api/auth/login", {
+          email: dados.get("email"),
+          senha: dados.get("senha"),
+        });
+        salvarSessao(resposta);
+        notificar("Bem-vindo(a)!", "sucesso");
+        setTimeout(() => { window.location.href = "/paginas/dashboard.html"; }, 400);
+      } catch (erro) {
+        notificar(erro.message || "Falha no login.", "perigo");
+        botao.disabled = false;
+        rotulo.textContent = "Entrar";
+      }
+    });
+  </script>
+</body>
+</html>

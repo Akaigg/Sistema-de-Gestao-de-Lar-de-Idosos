@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Residentes — Cuidar+</title>
+  <link rel="stylesheet" href="/estatico/css/design-system.css">
+  <link rel="stylesheet" href="/estatico/css/layout.css">
+</head>
+<body>
+  <div id="raiz"></div>
+  <script type="module">
+    import { Api } from "/estatico/js/api.js";
+    import {
+      montarLayout, notificar, formatarData, escaparHTML, abrirModal,
+    } from "/estatico/js/comum.js";
+
+    const area = montarLayout({
+      idPaginaAtiva: "residentes",
+      titulo: "Residentes",
+      subtitulo: "Cadastro completo dos residentes do lar",
+    });
+
+    let dados = { itens: [], total: 0, pagina: 1 };
+    let termoBusca = "";
+    let statusFiltro = "";
+
+    function renderizar() {
+      area.innerHTML = `
+        <div class="cartao">
+          <div class="cartao__cabecalho">
+            <div style="display:flex; gap: var(--esp-3); flex-wrap: wrap">
+              <input id="campo-busca" placeholder="Buscar por nome ou CPF..."
+                     style="padding: 0.5rem 0.85rem; border:1px solid var(--borda-forte); border-radius: var(--raio-md); min-width: 220px">
+              <select id="filtro-status" style="padding: 0.5rem 0.85rem; border:1px solid var(--borda-forte); border-radius: var(--raio-md)">
+                <option value="">Todos os status</option>
+                <option value="ativo">Ativo</option>
+                <option value="internado">Internado</option>
+                <option value="licenca">Em licença</option>
+                <option value="desligado">Desligado</option>
+                <option value="falecido">Falecido</option>
+              </select>
+            </div>
+            <button class="botao" id="btn-novo">+ Novo residente</button>
+          </div>
+
+          <table class="tabela">
+            <thead>
+              <tr>
+                <th>Nome</th>
+                <th>Idade</th>
+                <th>CPF</th>
+                <th>Sexo</th>
+                <th>Entrada</th>
+                <th>Dependência</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="corpo-tabela">
+              ${dados.itens.length === 0
+                ? '<tr><td colspan="8" style="text-align:center; color:var(--texto-suave); padding: var(--esp-6)">Nenhum residente encontrado.</td></tr>'
+                : dados.itens.map(r => `
+                <tr>
+                  <td><a href="/paginas/residente.html?id=${r.identificador}"><strong>${escaparHTML(r.nome_completo)}</strong></a></td>
+                  <td>${r.idade}</td>
+                  <td>${escaparHTML(r.cpf)}</td>
+                  <td>${r.sexo}</td>
+                  <td>${formatarData(r.data_entrada)}</td>
+                  <td><span class="pilula pilula--neutra">${escaparHTML(r.grau_dependencia.replaceAll("_"," "))}</span></td>
+                  <td>${pilulaStatus(r.status)}</td>
+                  <td>
+                    <a class="botao botao--pequeno botao--secundario" href="/paginas/residente.html?id=${r.identificador}">Abrir</a>
+                  </td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+          <p style="text-align:right; color: var(--texto-suave); margin-top: var(--esp-4)">
+            ${dados.total} resultado(s)
+          </p>
+        </div>
+      `;
+
+      document.getElementById("btn-novo").addEventListener("click", abrirCadastro);
+      const busca = document.getElementById("campo-busca");
+      busca.value = termoBusca;
+      busca.addEventListener("input", debouce(() => {
+        termoBusca = busca.value;
+        carregar();
+      }, 300));
+      const filtro = document.getElementById("filtro-status");
+      filtro.value = statusFiltro;
+      filtro.addEventListener("change", () => {
+        statusFiltro = filtro.value;
+        carregar();
+      });
+    }
+
+    function pilulaStatus(status) {
+      const mapa = {
+        ativo: "sucesso", internado: "aviso", licenca: "info",
+        desligado: "neutra", falecido: "perigo",
+      };
+      return `<span class="pilula pilula--${mapa[status] || "neutra"}">${status}</span>`;
+    }
+
+    function debouce(fn, ms) {
+      let id;
+      return (...args) => { clearTimeout(id); id = setTimeout(() => fn(...args), ms); };
+    }
+
+    async function carregar() {
+      try {
+        dados = await Api.get("/api/residentes", {
+          termo_busca: termoBusca || undefined,
+          status: statusFiltro || undefined,
+        });
+        renderizar();
+      } catch (erro) {
+        notificar(erro.message, "perigo");
+      }
+    }
+
+    function formularioCadastroHtml() {
+      return `
+        <div class="grade grade-2">
+          <div class="campo"><label>Nome completo *</label><input name="nome_completo" required></div>
+          <div class="campo"><label>CPF *</label><input name="cpf" required placeholder="000.000.000-00"></div>
+          <div class="campo"><label>Data de nascimento *</label><input name="data_nascimento" type="date" required></div>
+          <div class="campo"><label>Sexo *</label>
+            <select name="sexo" required>
+              <option value="M">Masculino</option>
+              <option value="F">Feminino</option>
+              <option value="O">Outro</option>
+            </select>
+          </div>
+          <div class="campo"><label>Data de entrada *</label><input name="data_entrada" type="date" required></div>
+          <div class="campo"><label>Grau de dependência</label>
+            <select name="grau_dependencia">
+              <option value="independente">Independente</option>
+              <option value="dependencia_leve">Dependência leve</option>
+              <option value="dependencia_moderada">Dependência moderada</option>
+              <option value="dependencia_grave">Dependência grave</option>
+              <option value="total">Total</option>
+            </select>
+          </div>
+          <div class="campo"><label>RG</label><input name="rg"></div>
+          <div class="campo"><label>Cartão SUS</label><input name="cartao_sus"></div>
+          <div class="campo"><label>Convênio</label><input name="convenio"></div>
+          <div class="campo"><label>Nº do convênio</label><input name="numero_convenio"></div>
+          <div class="campo"><label>Religião</label><input name="religiao"></div>
+          <div class="campo"><label>Estado civil</label><input name="estado_civil"></div>
+          <div class="campo"><label>Naturalidade</label><input name="naturalidade"></div>
+          <div class="campo"><label>Profissão anterior</label><input name="profissao_anterior"></div>
+        </div>
+        <div class="campo"><label>Observações</label><textarea name="observacoes"></textarea></div>
+        <div class="campo campo--horizontal">
+          <input type="checkbox" name="consentimento_imagem" id="ci">
+          <label for="ci">Há consentimento de uso de imagem (LGPD).</label>
+        </div>
+      `;
+    }
+
+    async function abrirCadastro() {
+      await abrirModal({
+        titulo: "Novo residente",
+        larguraGrande: true,
+        textoConfirmar: "Cadastrar",
+        conteudoHtml: `<form id="form-residente">${formularioCadastroHtml()}</form>`,
+        aoConfirmar: async (fundo) => {
+          const form = fundo.querySelector("#form-residente");
+          const dados = new FormData(form);
+          const payload = Object.fromEntries(dados.entries());
+          payload.consentimento_imagem = form.consentimento_imagem.checked;
+          try {
+            await Api.post("/api/residentes", payload);
+            notificar("Residente cadastrado.", "sucesso");
+            carregar();
+            return true;
+          } catch (erro) {
+            notificar(erro.message, "perigo");
+            return false;
+          }
+        },
+      });
+    }
+
+    carregar();
+  </script>
+</body>
+</html>

@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Financeiro — Cuidar+</title>
+  <link rel="stylesheet" href="/estatico/css/design-system.css">
+  <link rel="stylesheet" href="/estatico/css/layout.css">
+</head>
+<body>
+  <div id="raiz"></div>
+  <script type="module">
+    import { Api } from "/estatico/js/api.js";
+    import { montarLayout, notificar, escaparHTML, abrirModal, formatarData, formatarMoeda } from "/estatico/js/comum.js";
+
+    const area = montarLayout({ idPaginaAtiva: "financeiro", titulo: "Financeiro", subtitulo: "Mensalidades, lançamentos e fluxo de caixa" });
+
+    let residentes = [];
+
+    async function carregar() {
+      try {
+        const hoje = new Date();
+        const inicio = new Date(hoje.getFullYear(), hoje.getMonth(), 1).toISOString().split("T")[0];
+        const fim = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0).toISOString().split("T")[0];
+        const [fluxo, mens, lanc, resids] = await Promise.all([
+          Api.get("/api/financeiro/fluxo-caixa", { inicio, fim }),
+          Api.get("/api/financeiro/mensalidades", { mes: hoje.getMonth() + 1, ano: hoje.getFullYear() }),
+          Api.get("/api/financeiro/lancamentos", { inicio, fim }),
+          Api.get("/api/residentes", { tamanho_pagina: 200 }),
+        ]);
+        residentes = resids.itens;
+
+        area.innerHTML = `
+          <div class="grade grade-3" style="margin-bottom: var(--esp-6)">
+            <div class="cartao-indicador">
+              <span class="rotulo">Receitas do mês</span>
+              <span class="valor" style="color: var(--cor-sucesso)">${formatarMoeda(fluxo.total_receitas)}</span>
+            </div>
+            <div class="cartao-indicador">
+              <span class="rotulo">Despesas do mês</span>
+              <span class="valor" style="color: var(--cor-perigo)">${formatarMoeda(fluxo.total_despesas)}</span>
+            </div>
+            <div class="cartao-indicador cartao-indicador--destaque">
+              <span class="rotulo">Saldo</span>
+              <span class="valor">${formatarMoeda(fluxo.saldo)}</span>
+            </div>
+          </div>
+
+          <div class="cartao" style="margin-bottom: var(--esp-6)">
+            <div class="cartao__cabecalho">
+              <h3>Mensalidades do mês</h3>
+              <button class="botao botao--pequeno" id="btn-mens">+ Nova mensalidade</button>
+            </div>
+            ${mens.length === 0 ? "<p>Sem mensalidades no mês.</p>" : `
+            <table class="tabela">
+              <thead><tr><th>Residente</th><th>Competência</th><th>Vencimento</th><th>Valor</th><th>Status</th><th></th></tr></thead>
+              <tbody>${mens.map(m => `
+                <tr>
+                  <td>#${m.residente_id}</td>
+                  <td>${m.competencia_mes}/${m.competencia_ano}</td>
+                  <td>${formatarData(m.data_vencimento)}</td>
+                  <td>${formatarMoeda(m.valor)}</td>
+                  <td>${m.status}</td>
+                  <td>${m.status !== "pago" ? `<button class="botao botao--pequeno" data-quitar="${m.identificador}" data-valor="${m.valor}">Quitar</button>` : "✓"}</td>
+                </tr>`).join("")}</tbody>
+            </table>`}
+          </div>
+
+          <div class="cartao">
+            <div class="cartao__cabecalho">
+              <h3>Lançamentos do mês</h3>
+              <button class="botao botao--pequeno" id="btn-lanc">+ Novo lançamento</button>
+            </div>
+            ${lanc.length === 0 ? "<p>Sem lançamentos.</p>" : `
+            <table class="tabela">
+              <thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Tipo</th><th>Valor</th></tr></thead>
+              <tbody>${lanc.map(l => `
+                <tr>
+                  <td>${formatarData(l.data_competencia)}</td>
+                  <td>${escaparHTML(l.descricao)}</td>
+                  <td>${escaparHTML(l.categoria || "—")}</td>
+                  <td><span class="pilula ${l.tipo === "receita" ? "pilula--sucesso" : "pilula--perigo"}">${l.tipo}</span></td>
+                  <td>${formatarMoeda(l.valor)}</td>
+                </tr>`).join("")}</tbody>
+            </table>`}
+          </div>
+        `;
+
+        document.getElementById("btn-mens").addEventListener("click", abrirNovaMens);
+        document.getElementById("btn-lanc").addEventListener("click", abrirNovoLanc);
+        area.querySelectorAll("[data-quitar]").forEach(b => b.addEventListener("click", () => abrirQuitar(b.dataset.quitar, parseFloat(b.dataset.valor))));
+      } catch (e) {
+        notificar(e.message, "perigo");
+        area.innerHTML = `<p>${escaparHTML(e.message)}</p>`;
+      }
+    }
+
+    async function abrirNovaMens() {
+      const hoje = new Date();
+      await abrirModal({
+        titulo: "Nova mensalidade",
+        textoConfirmar: "Salvar",
+        conteudoHtml: `<form id="f">
+          <div class="campo"><label>Residente</label>
+            <select name="residente_id">${residentes.map(r => `<option value="${r.identificador}">${escaparHTML(r.nome_completo)}</option>`).join("")}</select>
+          </div>
+          <div class="grade grade-2">
+            <div class="campo"><label>Mês</label><input type="number" name="competencia_mes" value="${hoje.getMonth()+1}" required></div>
+            <div class="campo"><label>Ano</label><input type="number" name="competencia_ano" value="${hoje.getFullYear()}" required></div>
+            <div class="campo"><label>Valor (R$)</label><input type="number" name="valor" step="0.01" required></div>
+            <div class="campo"><label>Vencimento</label><input type="date" name="data_vencimento" required></div>
+          </div>
+        </form>`,
+        aoConfirmar: async (f) => {
+          const dados = Object.fromEntries(new FormData(f.querySelector("#f")));
+          ["residente_id","competencia_mes","competencia_ano"].forEach(k => dados[k] = parseInt(dados[k]));
+          dados.valor = parseFloat(dados.valor);
+          try { await Api.post("/api/financeiro/mensalidades", dados); notificar("Mensalidade criada.", "sucesso"); carregar(); return true; }
+          catch (e) { notificar(e.message, "perigo"); return false; }
+        },
+      });
+    }
+
+    async function abrirQuitar(id, valor) {
+      await abrirModal({
+        titulo: "Quitar mensalidade",
+        textoConfirmar: "Quitar",
+        conteudoHtml: `<form id="f">
+          <div class="campo"><label>Valor pago (R$)</label><input type="number" name="valor_pago" step="0.01" value="${valor}"></div>
+          <div class="campo"><label>Forma de pagamento</label>
+            <select name="forma_pagamento">
+              <option value="pix">PIX</option><option value="dinheiro">Dinheiro</option>
+              <option value="boleto">Boleto</option><option value="cartao_credito">Cartão crédito</option>
+              <option value="cartao_debito">Cartão débito</option><option value="transferencia">Transferência</option>
+            </select>
+          </div>
+          <div class="campo"><label>Data do pagamento</label><input type="date" name="data_pagamento" value="${new Date().toISOString().split('T')[0]}"></div>
+        </form>`,
+        aoConfirmar: async (f) => {
+          const dados = Object.fromEntries(new FormData(f.querySelector("#f")));
+          dados.valor_pago = parseFloat(dados.valor_pago);
+          try { await Api.post(`/api/financeiro/mensalidades/${id}/quitar`, dados); notificar("Quitada.", "sucesso"); carregar(); return true; }
+          catch (e) { notificar(e.message, "perigo"); return false; }
+        },
+      });
+    }
+
+    async function abrirNovoLanc() {
+      await abrirModal({
+        titulo: "Novo lançamento",
+        textoConfirmar: "Salvar",
+        conteudoHtml: `<form id="f">
+          <div class="grade grade-2">
+            <div class="campo"><label>Tipo</label>
+              <select name="tipo"><option value="receita">Receita</option><option value="despesa">Despesa</option></select>
+            </div>
+            <div class="campo"><label>Valor (R$)</label><input type="number" step="0.01" name="valor" required></div>
+            <div class="campo"><label>Data</label><input type="date" name="data_competencia" required value="${new Date().toISOString().split('T')[0]}"></div>
+            <div class="campo"><label>Categoria</label><input name="categoria"></div>
+          </div>
+          <div class="campo"><label>Descrição</label><input name="descricao" required></div>
+          <div class="campo"><label>Fornecedor / Pagador</label><input name="fornecedor"></div>
+        </form>`,
+        aoConfirmar: async (f) => {
+          const dados = Object.fromEntries(new FormData(f.querySelector("#f")));
+          dados.valor = parseFloat(dados.valor);
+          try { await Api.post("/api/financeiro/lancamentos", dados); notificar("Lançamento registrado.", "sucesso"); carregar(); return true; }
+          catch (e) { notificar(e.message, "perigo"); return false; }
+        },
+      });
+    }
+
+    carregar();
+  </script>
+</body>
+</html>

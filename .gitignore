@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+ENV/
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Banco de dados
+dados/*.db
+dados/*.db-journal
+dados/*.db-shm
+dados/*.db-wal
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Arquivos sensíveis
+.env
+.env.local
+*.pem
+*.key
+
+# Uploads / arquivos gerados em runtime
+backend/uploads/
+backend/temporario/
+backend/assinaturas/

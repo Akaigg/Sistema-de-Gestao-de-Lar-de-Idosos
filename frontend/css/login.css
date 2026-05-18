@@ -1,0 +1,85 @@
+/* Página de login do Cuidar+ */
+
+.tela-login {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  background: var(--fundo-principal);
+}
+
+@media (max-width: 900px) {
+  .tela-login { grid-template-columns: 1fr; }
+  .tela-login__capa { display: none; }
+}
+
+.tela-login__capa {
+  background:
+    linear-gradient(135deg, rgba(14,116,144,0.95), rgba(21,94,117,0.95)),
+    radial-gradient(circle at 20% 30%, rgba(255,255,255,0.15), transparent 50%),
+    radial-gradient(circle at 80% 80%, rgba(103,232,249,0.25), transparent 60%);
+  color: white;
+  padding: var(--esp-12);
+  display: flex; flex-direction: column; justify-content: space-between;
+}
+
+.tela-login__capa .marca-grande {
+  display: flex; align-items: center; gap: var(--esp-3);
+  font-weight: 800; font-size: 1.5rem;
+  letter-spacing: -0.02em;
+}
+
+.tela-login__capa .marca-grande .icone {
+  width: 48px; height: 48px;
+  background: rgba(255,255,255,0.15);
+  border-radius: 14px;
+  display: flex; align-items: center; justify-content: center;
+}
+
+.tela-login__capa h2 {
+  font-size: 2.4rem; line-height: 1.15; margin: 0; color: white;
+}
+
+.tela-login__capa p { color: rgba(255,255,255,0.85); font-size: 1.05rem; max-width: 480px; }
+
+.tela-login__capa .destaque {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--esp-5);
+  margin-top: var(--esp-4);
+}
+
+.tela-login__capa .destaque div {
+  background: rgba(255,255,255,0.08);
+  padding: var(--esp-4);
+  border-radius: var(--raio-lg);
+  border: 1px solid rgba(255,255,255,0.18);
+}
+
+.tela-login__capa .destaque strong { font-size: 1.4rem; }
+.tela-login__capa .destaque span { color: rgba(255,255,255,0.8); font-size: 0.85rem; }
+
+.tela-login__formulario {
+  display: flex; align-items: center; justify-content: center;
+  padding: var(--esp-8);
+}
+
+.formulario-login {
+  width: min(440px, 100%);
+  background: var(--fundo-cartao);
+  padding: var(--esp-8);
+  border-radius: var(--raio-xl);
+  box-shadow: var(--sombra-lg);
+  border: 1px solid var(--borda-padrao);
+}
+
+.formulario-login h1 { font-size: 1.6rem; margin: 0; }
+.formulario-login .legenda { color: var(--texto-secundario); margin-bottom: var(--esp-5); }
+
+.formulario-login .botao { width: 100%; margin-top: var(--esp-2); padding: 0.85rem; }
+
+.rodape-login {
+  margin-top: var(--esp-6);
+  font-size: 0.8rem;
+  color: var(--texto-suave);
+  text-align: center;
+}
