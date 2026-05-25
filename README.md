@@ -47,7 +47,6 @@ Veja [`docs/arquitetura.md`](docs/arquitetura.md) e os
 ```bash
 # 1. Crie um ambiente virtual
 python -m venv .venv
-source .venv/bin/activate          # Linux/Mac
 .venv\Scripts\activate             # Windows
 
 # 2. Instale as dependências
