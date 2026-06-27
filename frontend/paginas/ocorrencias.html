@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ocorrências — Cuidar+</title>
+  <link rel="stylesheet" href="/estatico/css/design-system.css">
+  <link rel="stylesheet" href="/estatico/css/layout.css">
+</head>
+<body>
+  <div id="raiz"></div>
+  <script type="module">
+    import { Api } from "/estatico/js/api.js";
+    import { montarLayout, notificar, escaparHTML, abrirModal, formatarDataHora, confirmar } from "/estatico/js/comum.js";
+
+    const area = montarLayout({ idPaginaAtiva: "ocorrencias", titulo: "Ocorrências", subtitulo: "Quedas, intercorrências e eventos" });
+
+    let residentes = [], ocorrencias = [];
+
+    async function carregar() {
+      [residentes, ocorrencias] = await Promise.all([
+        Api.get("/api/residentes", { tamanho_pagina: 200 }).then(r => r.itens),
+        Api.get("/api/ocorrencias"),
+      ]);
+      renderizar();
+    }
+
+    function pilulaGravidade(g) {
+      const m = { leve: "info", moderada: "aviso", grave: "perigo", critica: "perigo" };
+      return `<span class="pilula pilula--${m[g]||"neutra"}">${g}</span>`;
+    }
+
+    function renderizar() {
+      area.innerHTML = `
+        <div class="cartao">
+          <div class="cartao__cabecalho">
+            <h3>Histórico (${ocorrencias.length})</h3>
+            <button class="botao" id="btn-novo">+ Registrar ocorrência</button>
+          </div>
+          ${ocorrencias.length === 0 ? "<p>Nenhuma ocorrência registrada.</p>" : `
+            <table class="tabela">
+              <thead><tr><th>Quando</th><th>Residente</th><th>Tipo</th><th>Gravidade</th><th>Descrição</th><th>Hospital</th><th>Status</th><th></th></tr></thead>
+              <tbody>${ocorrencias.map(o => `
+                <tr>
+                  <td>${formatarDataHora(o.ocorreu_em)}</td>
+                  <td>#${o.residente_id}</td>
+                  <td>${escaparHTML(o.tipo)}</td>
+                  <td>${pilulaGravidade(o.gravidade)}</td>
+                  <td>${escaparHTML((o.descricao||"").slice(0, 80))}${o.descricao && o.descricao.length > 80 ? "…" : ""}</td>
+                  <td>${o.necessitou_hospital ? "Sim" : "Não"}</td>
+                  <td>${o.encerrada ? '<span class="pilula pilula--neutra">Encerrada</span>' : '<span class="pilula pilula--aviso">Aberta</span>'}</td>
+                  <td>${!o.encerrada ? `<button class="botao botao--pequeno botao--secundario" data-enc="${o.identificador}">Encerrar</button>` : "—"}</td>
+                </tr>`).join("")}</tbody>
+            </table>`}
+        </div>
+      `;
+      document.getElementById("btn-novo").addEventListener("click", abrirNova);
+      area.querySelectorAll("[data-enc]").forEach(b => b.addEventListener("click", async () => {
+        if (!(await confirmar("Encerrar esta ocorrência?"))) return;
+        try { await Api.post(`/api/ocorrencias/${b.dataset.enc}/encerrar`); notificar("Encerrada.", "sucesso"); carregar(); }
+        catch (e) { notificar(e.message, "perigo"); }
+      }));
+    }
+
+    async function abrirNova() {
+      await abrirModal({
+        titulo: "Registrar ocorrência",
+        larguraGrande: true,
+        textoConfirmar: "Registrar",
+        conteudoHtml: `<form id="f">
+          <div class="grade grade-2">
+            <div class="campo"><label>Residente</label>
+              <select name="residente_id">${residentes.map(r => `<option value="${r.identificador}">${escaparHTML(r.nome_completo)}</option>`).join("")}</select>
+            </div>
+            <div class="campo"><label>Tipo</label>
+              <select name="tipo">
+                <option value="queda">Queda</option>
+                <option value="intercorrencia_clinica">Intercorrência clínica</option>
+                <option value="agressividade">Agressividade</option>
+                <option value="evasao">Evasão</option>
+                <option value="reacao_medicamentosa">Reação medicamentosa</option>
+                <option value="acidente">Acidente</option>
+                <option value="outra">Outra</option>
+              </select>
+            </div>
+            <div class="campo"><label>Gravidade</label>
+              <select name="gravidade">
+                <option value="leve">Leve</option>
+                <option value="moderada">Moderada</option>
+                <option value="grave">Grave</option>
+                <option value="critica">Crítica</option>
+              </select>
+            </div>
+            <div class="campo"><label>Local</label><input name="local" placeholder="ex.: Quarto 12"></div>
+          </div>
+          <div class="campo"><label>Descrição</label><textarea name="descricao" rows="4" required></textarea></div>
+          <div class="campo"><label>Medidas adotadas</label><textarea name="medidas_adotadas"></textarea></div>
+          <div class="campo campo--horizontal"><input type="checkbox" name="hospital" id="hp"><label for="hp">Necessitou hospital</label></div>
+        </form>`,
+        aoConfirmar: async (f) => {
+          const dados = Object.fromEntries(new FormData(f.querySelector("#f")));
+          dados.residente_id = parseInt(dados.residente_id);
+          dados.necessitou_hospital = f.querySelector("[name=hospital]").checked;
+          try { await Api.post("/api/ocorrencias", dados); notificar("Registrada.", "sucesso"); carregar(); return true; }
+          catch (e) { notificar(e.message, "perigo"); return false; }
+        },
+      });
+    }
+
+    carregar();
+  </script>
+</body>
+</html>

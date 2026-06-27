@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Documentos — Cuidar+</title>
+  <link rel="stylesheet" href="/estatico/css/design-system.css">
+  <link rel="stylesheet" href="/estatico/css/layout.css">
+  <style>
+    .canvas-assinatura {
+      border: 2px dashed var(--borda-forte);
+      border-radius: var(--raio-md);
+      background: white;
+      width: 100%;
+      height: 220px;
+      cursor: crosshair;
+      touch-action: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="raiz"></div>
+  <script type="module">
+    import { Api, obterToken } from "/estatico/js/api.js";
+    import { montarLayout, notificar, escaparHTML, abrirModal, formatarDataHora } from "/estatico/js/comum.js";
+
+    const area = montarLayout({ idPaginaAtiva: "documentos", titulo: "Documentos", subtitulo: "Modelos e assinatura digital" });
+
+    let modelos = [], residentes = [], docs = [];
+
+    async function carregar() {
+      [modelos, residentes, docs] = await Promise.all([
+        Api.get("/api/documentos/modelos"),
+        Api.get("/api/residentes", { tamanho_pagina: 200 }).then(r => r.itens),
+        Api.get("/api/documentos"),
+      ]);
+      renderizar();
+    }
+
+    function renderizar() {
+      area.innerHTML = `
+        <div class="grade grade-2" style="margin-bottom: var(--esp-6)">
+          <div class="cartao">
+            <div class="cartao__cabecalho">
+              <h3>Modelos disponíveis</h3>
+              <button class="botao botao--pequeno" id="btn-modelo">+ Novo modelo</button>
+            </div>
+            <ul>${modelos.map(m => `<li><strong>${escaparHTML(m.titulo)}</strong> — <small>${escaparHTML(m.descricao||"")}</small> — <button class="botao botao--pequeno botao--secundario" data-gerar="${m.identificador}">Gerar</button></li>`).join("")}</ul>
+          </div>
+          <div class="cartao">
+            <h3>Como funciona?</h3>
+            <p>1. Selecione um modelo e gere o documento em PDF.<br>
+               2. Clique em <strong>Assinar</strong> e desenhe a assinatura.<br>
+               3. O sistema atualiza o PDF e calcula o hash SHA-256.</p>
+          </div>
+        </div>
+
+        <div class="cartao">
+          <div class="cartao__cabecalho"><h3>Documentos gerados</h3></div>
+          ${docs.length === 0 ? "<p>Nenhum documento ainda.</p>" : `
+            <table class="tabela">
+              <thead><tr><th>Título</th><th>Residente</th><th>Gerado em</th><th>Assinado em</th><th>Hash</th><th></th></tr></thead>
+              <tbody>${docs.map(d => `
+                <tr>
+                  <td>${escaparHTML(d.titulo)}</td>
+                  <td>${d.residente_id ? "#"+d.residente_id : "—"}</td>
+                  <td>${formatarDataHora(d.gerado_em)}</td>
+                  <td>${d.assinado_em ? formatarDataHora(d.assinado_em) : '<span class="pilula pilula--aviso">Pendente</span>'}</td>
+                  <td><small style="font-family: var(--fonte-mono); font-size: 0.7rem">${d.hash_sha256.slice(0,12)}…</small></td>
+                  <td>
+                    <a href="/api/documentos/${d.identificador}/baixar?token=${obterToken()}" class="botao botao--pequeno botao--secundario"
+                       onclick="event.preventDefault(); baixar(${d.identificador})">Baixar</a>
+                    ${!d.assinado_em ? `<button class="botao botao--pequeno" data-assinar="${d.identificador}">Assinar</button>` : ""}
+                  </td>
+                </tr>`).join("")}</tbody>
+            </table>`}
+        </div>
+      `;
+      document.getElementById("btn-modelo").addEventListener("click", abrirNovoModelo);
+      area.querySelectorAll("[data-gerar]").forEach(b => b.addEventListener("click", () => gerar(parseInt(b.dataset.gerar))));
+      area.querySelectorAll("[data-assinar]").forEach(b => b.addEventListener("click", () => assinar(parseInt(b.dataset.assinar))));
+    }
+
+    window.baixar = async function(id) {
+      const r = await fetch(`/api/documentos/${id}/baixar`, { headers: { Authorization: `Bearer ${obterToken()}` } });
+      if (!r.ok) { notificar("Erro ao baixar.", "perigo"); return; }
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a"); a.href = url; a.download = `documento_${id}.pdf`; a.click();
+      URL.revokeObjectURL(url);
+    };
+
+    async function gerar(modeloId) {
+      await abrirModal({
+        titulo: "Gerar documento",
+        textoConfirmar: "Gerar",
+        conteudoHtml: `<form id="f">
+          <div class="campo"><label>Residente vinculado (opcional)</label>
+            <select name="residente_id">
+              <option value="">— Nenhum —</option>
+              ${residentes.map(r => `<option value="${r.identificador}">${escaparHTML(r.nome_completo)}</option>`).join("")}
+            </select>
+          </div>
+          <div class="campo"><label>Observações</label><input name="observacoes"></div>
+        </form>`,
+        aoConfirmar: async (f) => {
+          const dados = Object.fromEntries(new FormData(f.querySelector("#f")));
+          const payload = { modelo_id: modeloId, variaveis: {} };
+          if (dados.residente_id) payload.residente_id = parseInt(dados.residente_id);
+          if (dados.observacoes) payload.observacoes = dados.observacoes;
+          try { await Api.post("/api/documentos/gerar", payload); notificar("Documento gerado.", "sucesso"); carregar(); return true; }
+          catch (e) { notificar(e.message, "perigo"); return false; }
+        },
+      });
+    }
+
+    async function assinar(docId) {
+      await abrirModal({
+        titulo: "Assinar documento",
+        larguraGrande: true,
+        textoConfirmar: "Concluir assinatura",
+        conteudoHtml: `<form id="f">
+          <div class="grade grade-2">
+            <div class="campo"><label>Nome completo do assinante</label><input name="nome_assinante" required></div>
+            <div class="campo"><label>Documento (CPF/RG)</label><input name="documento_assinante" required></div>
+          </div>
+          <div class="campo">
+            <label>Assine no quadro abaixo</label>
+            <canvas id="canvas" class="canvas-assinatura"></canvas>
+            <div class="flex gap-2" style="margin-top:.5rem">
+              <button type="button" class="botao botao--pequeno botao--secundario" id="btn-limpar">Limpar</button>
+            </div>
+          </div>
+        </form>`,
+        aoConfirmar: async (f) => {
+          const dados = Object.fromEntries(new FormData(f.querySelector("#f")));
+          if (!dados.nome_assinante || !dados.documento_assinante) {
+            notificar("Preencha nome e documento.", "aviso"); return false;
+          }
+          const canvas = f.querySelector("#canvas");
+          // Verifica se há traço (pixels não-brancos)
+          const ctx = canvas.getContext("2d");
+          const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+          let temTraço = false;
+          for (let i = 0; i < pixels.length; i += 4) {
+            if (pixels[i+3] > 0 && (pixels[i] < 250 || pixels[i+1] < 250 || pixels[i+2] < 250)) {
+              temTraço = true; break;
+            }
+          }
+          if (!temTraço) { notificar("Desenhe a assinatura.", "aviso"); return false; }
+
+          dados.imagem_assinatura_base64 = canvas.toDataURL("image/png");
+          try { await Api.post(`/api/documentos/${docId}/assinar`, dados); notificar("Assinado!", "sucesso"); carregar(); return true; }
+          catch (e) { notificar(e.message, "perigo"); return false; }
+        },
+      });
+
+      // Inicia canvas
+      setTimeout(() => {
+        const canvas = document.querySelector(".fundo-modal #canvas");
+        if (!canvas) return;
+        canvas.width = canvas.offsetWidth;
+        canvas.height = canvas.offsetHeight;
+        const ctx = canvas.getContext("2d");
+        ctx.fillStyle = "white"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.lineWidth = 2.5; ctx.lineCap = "round"; ctx.lineJoin = "round";
+        ctx.strokeStyle = "#0f172a";
+
+        let desenhando = false;
+        const inicio = (e) => {
+          desenhando = true;
+          const p = coordenadas(e);
+          ctx.beginPath(); ctx.moveTo(p.x, p.y);
+        };
+        const mover = (e) => {
+          if (!desenhando) return;
+          e.preventDefault();
+          const p = coordenadas(e);
+          ctx.lineTo(p.x, p.y); ctx.stroke();
+        };
+        const fim = () => { desenhando = false; };
+
+        function coordenadas(e) {
+          const rect = canvas.getBoundingClientRect();
+          if (e.touches && e.touches[0]) {
+            return { x: e.touches[0].clientX - rect.left, y: e.touches[0].clientY - rect.top };
+          }
+          return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+        }
+
+        canvas.addEventListener("mousedown", inicio);
+        canvas.addEventListener("mousemove", mover);
+        canvas.addEventListener("mouseup", fim);
+        canvas.addEventListener("mouseleave", fim);
+        canvas.addEventListener("touchstart", inicio);
+        canvas.addEventListener("touchmove", mover);
+        canvas.addEventListener("touchend", fim);
+
+        document.getElementById("btn-limpar").addEventListener("click", () => {
+          ctx.fillStyle = "white"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+        });
+      }, 80);
+    }
+
+    async function abrirNovoModelo() {
+      await abrirModal({
+        titulo: "Novo modelo de documento",
+        larguraGrande: true,
+        textoConfirmar: "Criar",
+        conteudoHtml: `<form id="f">
+          <div class="grade grade-2">
+            <div class="campo"><label>Título</label><input name="titulo" required></div>
+            <div class="campo"><label>Chave (sem espaços)</label><input name="chave" required pattern="[a-z0-9_]+"></div>
+          </div>
+          <div class="campo"><label>Descrição</label><input name="descricao"></div>
+          <div class="campo">
+            <label>Conteúdo (use placeholders como {{residente_nome}}, {{residente_cpf}}, {{nome_assinante}}, {{data_atual}})</label>
+            <textarea name="conteudo_template" rows="8" required></textarea>
+          </div>
+        </form>`,
+        aoConfirmar: async (f) => {
+          const dados = Object.fromEntries(new FormData(f.querySelector("#f")));
+          try { await Api.post("/api/documentos/modelos", dados); notificar("Modelo criado.", "sucesso"); carregar(); return true; }
+          catch (e) { notificar(e.message, "perigo"); return false; }
+        },
+      });
+    }
+
+    carregar();
+  </script>
+</body>
+</html>

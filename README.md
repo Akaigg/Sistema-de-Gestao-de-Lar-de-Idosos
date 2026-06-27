@@ -47,7 +47,6 @@ Veja [`docs/arquitetura.md`](docs/arquitetura.md) e os
 ```bash
 # 1. Crie um ambiente virtual
 python -m venv .venv
-source .venv/bin/activate          # Linux/Mac
 .venv\Scripts\activate             # Windows
 
 # 2. Instale as dependências
@@ -55,6 +54,10 @@ pip install -r backend/requirements.txt
 
 # 3. Crie o banco e o usuário administrador padrão
 python -m backend.scripts.inicializar_banco
+
+# 3b. (Opcional) Popule o banco com dados fictícios de demonstração
+python -m backend.scripts.popular_dados_ficticios
+# Para apagar e repopular do zero: RECRIAR=1 python -m backend.scripts.popular_dados_ficticios
 
 # 4. Suba o servidor
 uvicorn backend.main:app --reload --port 8000
@@ -67,6 +70,10 @@ Credencial padrão criada pelo script de inicialização:
 
 - **Usuário:** `admin@cuidarmais.com.br`
 - **Senha:** `Admin@2026` (altere no primeiro acesso)
+
+Os dados fictícios criam também funcionários de demonstração (médicos, enfermeiros,
+cuidadores, nutricionista, financeiro e recepção), todos com a senha `Cuidar@2026`.
+Exemplo: `patricia.nogueira@cuidarmais.com.br` / `Cuidar@2026`.
 
 ## Estrutura de pastas
 

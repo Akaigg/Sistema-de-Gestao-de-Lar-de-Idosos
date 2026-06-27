@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Painel — Cuidar+</title>
+  <link rel="stylesheet" href="/estatico/css/design-system.css">
+  <link rel="stylesheet" href="/estatico/css/layout.css">
+</head>
+<body>
+  <div id="raiz"></div>
+  <script type="module">
+    import { Api } from "/estatico/js/api.js";
+    import { montarLayout, notificar, formatarData, escaparHTML } from "/estatico/js/comum.js";
+    import { icone } from "/estatico/js/icones.js";
+
+    const area = montarLayout({
+      idPaginaAtiva: "dashboard",
+      titulo: "Painel inicial",
+      subtitulo: "Visão geral do dia a dia do lar",
+    });
+
+    async function carregar() {
+      area.innerHTML = '<div class="carregando"></div> Carregando indicadores...';
+      try {
+        const ind = await Api.get("/api/dashboard");
+        const hoje = new Date();
+        const inicioDia = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate()).toISOString();
+        const fimDia = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate(), 23, 59, 59).toISOString();
+        const consultas = await Api.get("/api/prontuario/consultas", { inicio: inicioDia, fim: fimDia });
+
+        area.innerHTML = `
+          <div class="grade grade-4">
+            <div class="cartao-indicador cartao-indicador--destaque">
+              <span class="rotulo">Residentes ativos</span>
+              <span class="valor">${ind.total_residentes_ativos}</span>
+              <span class="legenda">Total atualmente sob nossos cuidados</span>
+            </div>
+            <div class="cartao-indicador">
+              <span class="rotulo">Ocupação dos leitos</span>
+              <span class="valor">${ind.taxa_ocupacao_percentual.toFixed(1)}%</span>
+              <span class="legenda">${ind.leitos_ocupados} de ${ind.total_leitos} leitos</span>
+            </div>
+            <div class="cartao-indicador">
+              <span class="rotulo">Medicações hoje</span>
+              <span class="valor">${ind.aplicacoes_medicamento_hoje}</span>
+              <span class="legenda">Aplicações previstas para o dia</span>
+            </div>
+            <div class="cartao-indicador">
+              <span class="rotulo">Consultas hoje</span>
+              <span class="valor">${ind.consultas_hoje}</span>
+              <span class="legenda">Internas e externas</span>
+            </div>
+          </div>
+
+          <div class="grade grade-2" style="margin-top: var(--esp-8)">
+            <div class="cartao">
+              <div class="cartao__cabecalho">
+                <h3>Próximas consultas</h3>
+                <a href="/paginas/consultas.html" class="botao botao--pequeno botao--fantasma">Ver todas</a>
+              </div>
+              ${consultas.length === 0
+                ? '<p>Nenhuma consulta agendada para hoje.</p>'
+                : `<table class="tabela">
+                    <thead><tr><th>Horário</th><th>Residente</th><th>Profissional</th><th>Tipo</th></tr></thead>
+                    <tbody>
+                      ${consultas.slice(0, 8).map(c => `
+                        <tr>
+                          <td>${new Date(c.data_hora).toLocaleTimeString("pt-BR", {hour:"2-digit", minute:"2-digit"})}</td>
+                          <td>#${c.residente_id}</td>
+                          <td>${escaparHTML(c.profissional)}</td>
+                          <td>${escaparHTML(c.tipo)}</td>
+                        </tr>
+                      `).join("")}
+                    </tbody>
+                  </table>`}
+            </div>
+
+            <div class="cartao">
+              <div class="cartao__cabecalho">
+                <h3>Aniversariantes do mês</h3>
+                <span class="pilula pilula--info">${ind.total_aniversariantes_mes} residente(s)</span>
+              </div>
+              <p>Lembre-se de planejar algo especial para os residentes que fazem aniversário neste mês.</p>
+              <a href="/paginas/residentes.html" class="botao botao--secundario botao--pequeno">Ver residentes</a>
+            </div>
+          </div>
+
+          <div class="cartao" style="margin-top: var(--esp-8)">
+            <div class="cartao__cabecalho">
+              <h3>Atalhos rápidos</h3>
+            </div>
+            <div class="grade grade-4" style="gap: var(--esp-3)">
+              <a class="botao botao--secundario" href="/paginas/residentes.html">${icone("mais", 18)} Novo residente</a>
+              <a class="botao botao--secundario" href="/paginas/medicacao.html">${icone("medicacao", 18)} Calendário de medicação</a>
+              <a class="botao botao--secundario" href="/paginas/ocorrencias.html">${icone("ocorrencias", 18)} Registrar ocorrência</a>
+              <a class="botao botao--secundario" href="/paginas/visitas.html">${icone("visitas", 18)} Registrar visita</a>
+            </div>
+          </div>
+        `;
+      } catch (erro) {
+        notificar(erro.message, "perigo");
+        area.innerHTML = `<p>Erro ao carregar painel: ${escaparHTML(erro.message)}</p>`;
+      }
+    }
+
+    carregar();
+  </script>
+</body>
+</html>

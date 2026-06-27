@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Entrar — Cuidar+</title>
+  <link rel="stylesheet" href="/estatico/css/design-system.css">
+  <link rel="stylesheet" href="/estatico/css/login.css">
+</head>
+<body>
+  <div class="tela-login">
+    <!-- Lado acolhedor: boas-vindas, sem listar funcionalidades -->
+    <section class="tela-login__capa">
+      <div class="capa__brilho" aria-hidden="true"></div>
+
+      <div class="marca-grande">
+        <div class="icone" id="logo-coracao" aria-hidden="true"></div>
+        <span>Cuidar+</span>
+      </div>
+
+      <div class="capa__mensagem">
+        <p class="capa__saudacao" id="saudacao">Olá, que bom ter você por aqui.</p>
+        <h2>Cada dia aqui é sobre cuidar de quem cuidou da gente.</h2>
+        <p class="capa__texto">
+          Este é o espaço da equipe do nosso lar. Faça login para acompanhar
+          os residentes e seguir com o cuidado de sempre, com tranquilidade.
+        </p>
+      </div>
+
+      <div class="capa__assinatura">
+        <span class="capa__pontos" aria-hidden="true"><i></i><i></i><i></i></span>
+        <small>© 2026 Cuidar+ · Feito com carinho para a sua equipe</small>
+      </div>
+    </section>
+
+    <!-- Lado do formulário -->
+    <section class="tela-login__formulario">
+      <form class="formulario-login" id="formulario-login" autocomplete="off">
+        <div class="formulario-login__marca">
+          <span class="formulario-login__icone" id="logo-coracao-form" aria-hidden="true"></span>
+          <span>Cuidar+</span>
+        </div>
+
+        <h1>Bem-vindo de volta</h1>
+        <p class="legenda">Entre com a sua conta para continuar.</p>
+
+        <div class="campo">
+          <label for="email">E-mail</label>
+          <input id="email" name="email" type="email" required autocomplete="username"
+                 placeholder="seu.nome@cuidarmais.com.br">
+        </div>
+
+        <div class="campo">
+          <label for="senha">Senha</label>
+          <div class="campo-senha">
+            <input id="senha" name="senha" type="password" required minlength="8"
+                   autocomplete="current-password" placeholder="Sua senha">
+            <button type="button" class="campo-senha__alternar" id="ver-senha"
+                    aria-label="Mostrar senha"></button>
+          </div>
+        </div>
+
+        <button type="submit" class="botao" id="btn-entrar">
+          <span id="rotulo-entrar">Entrar</span>
+        </button>
+
+        <p class="rodape-login">
+          Esqueceu a senha? É só falar com a administração que a gente te ajuda.
+        </p>
+      </form>
+    </section>
+  </div>
+
+  <script type="module">
+    import { Api, salvarSessao, obterToken } from "/estatico/js/api.js";
+    import { notificar, aplicarTemaSalvo } from "/estatico/js/comum.js";
+    import { icone } from "/estatico/js/icones.js";
+    aplicarTemaSalvo();
+
+    // Ícones (coração de cuidado) e olho da senha
+    document.getElementById("logo-coracao").innerHTML = icone("coracao", 26);
+    document.getElementById("logo-coracao-form").innerHTML = icone("coracao", 20);
+    const botaoVerSenha = document.getElementById("ver-senha");
+    botaoVerSenha.innerHTML = icone("olho", 18);
+
+    // Saudação conforme a hora do dia — toque caloroso
+    const h = new Date().getHours();
+    const saudacao =
+      h < 12 ? "Bom dia, que bom ter você por aqui." :
+      h < 18 ? "Boa tarde, que bom ter você por aqui." :
+               "Boa noite, que bom ter você por aqui.";
+    document.getElementById("saudacao").textContent = saudacao;
+
+    // Mostrar/ocultar senha
+    const campoSenha = document.getElementById("senha");
+    botaoVerSenha.addEventListener("click", () => {
+      const mostrando = campoSenha.type === "text";
+      campoSenha.type = mostrando ? "password" : "text";
+      botaoVerSenha.innerHTML = icone(mostrando ? "olho" : "olho-fechado", 18);
+      botaoVerSenha.setAttribute("aria-label", mostrando ? "Mostrar senha" : "Ocultar senha");
+    });
+
+    if (obterToken()) window.location.href = "/paginas/dashboard.html";
+
+    const form = document.getElementById("formulario-login");
+    form.addEventListener("submit", async (evento) => {
+      evento.preventDefault();
+      const dados = new FormData(form);
+      const botao = document.getElementById("btn-entrar");
+      const rotulo = document.getElementById("rotulo-entrar");
+      botao.disabled = true;
+      rotulo.innerHTML = '<span class="carregando" style="border-top-color: white"></span>';
+      try {
+        const resposta = await Api.post("/api/auth/login", {
+          email: dados.get("email"),
+          senha: dados.get("senha"),
+        });
+        salvarSessao(resposta);
+        notificar("Bom te ver de novo!", "sucesso");
+        setTimeout(() => { window.location.href = "/paginas/dashboard.html"; }, 400);
+      } catch (erro) {
+        notificar(erro.message || "Não foi possível entrar. Confira o e-mail e a senha.", "perigo");
+        botao.disabled = false;
+        rotulo.textContent = "Entrar";
+      }
+    });
+  </script>
+</body>
+</html>

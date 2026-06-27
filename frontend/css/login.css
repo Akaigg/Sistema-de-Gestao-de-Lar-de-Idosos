@@ -1,0 +1,189 @@
+/* ===========================================================
+   Cuidar+ — Tela de login (acolhedora e suave)
+   =========================================================== */
+
+.tela-login {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 1.05fr 1fr;
+  background: var(--fundo-principal);
+}
+
+/* ----------- Lado acolhedor ----------- */
+
+.tela-login__capa {
+  position: relative;
+  overflow: hidden;
+  color: white;
+  padding: clamp(2rem, 5vw, 4rem);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: var(--esp-8);
+  background:
+    radial-gradient(circle at 18% 22%, rgba(103, 232, 249, 0.30), transparent 45%),
+    radial-gradient(circle at 85% 90%, rgba(22, 163, 74, 0.28), transparent 50%),
+    linear-gradient(150deg, var(--cor-primaria-escura), var(--cor-primaria) 70%);
+}
+
+/* brilho lento e suave ao fundo */
+.capa__brilho {
+  position: absolute;
+  width: 480px; height: 480px;
+  top: -120px; right: -120px;
+  background: radial-gradient(circle, rgba(255,255,255,0.18), transparent 65%);
+  border-radius: 50%;
+  animation: flutuar 14s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+@keyframes flutuar {
+  from { transform: translate(0, 0) scale(1); }
+  to   { transform: translate(-40px, 50px) scale(1.12); }
+}
+
+.tela-login__capa > * { position: relative; z-index: 1; }
+
+.marca-grande {
+  display: flex; align-items: center; gap: var(--esp-3);
+  font-weight: 800; font-size: 1.5rem;
+  letter-spacing: -0.02em;
+}
+.marca-grande .icone {
+  width: 50px; height: 50px;
+  background: rgba(255,255,255,0.16);
+  border: 1px solid rgba(255,255,255,0.25);
+  border-radius: 16px;
+  display: flex; align-items: center; justify-content: center;
+  color: white;
+  backdrop-filter: blur(4px);
+}
+
+.capa__mensagem { max-width: 30rem; }
+
+.capa__saudacao {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: rgba(255,255,255,0.85);
+  margin: 0 0 var(--esp-3);
+}
+
+.tela-login__capa h2 {
+  font-size: clamp(1.9rem, 3vw, 2.6rem);
+  line-height: 1.18;
+  margin: 0 0 var(--esp-4);
+  color: white;
+  letter-spacing: -0.02em;
+}
+
+.capa__texto {
+  color: rgba(255,255,255,0.88);
+  font-size: 1.05rem;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.capa__assinatura {
+  display: flex;
+  align-items: center;
+  gap: var(--esp-3);
+  color: rgba(255,255,255,0.7);
+}
+.capa__pontos { display: inline-flex; gap: 5px; }
+.capa__pontos i {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: rgba(255,255,255,0.5);
+  animation: pulsar 1.8s ease-in-out infinite;
+}
+.capa__pontos i:nth-child(2) { animation-delay: 0.3s; }
+.capa__pontos i:nth-child(3) { animation-delay: 0.6s; }
+@keyframes pulsar {
+  0%, 100% { opacity: 0.4; transform: scale(0.85); }
+  50%      { opacity: 1;   transform: scale(1.1); }
+}
+
+/* ----------- Lado do formulário ----------- */
+
+.tela-login__formulario {
+  display: flex; align-items: center; justify-content: center;
+  padding: var(--esp-8);
+}
+
+.formulario-login {
+  width: min(420px, 100%);
+  background: var(--fundo-cartao);
+  padding: clamp(1.75rem, 4vw, 2.75rem);
+  border-radius: var(--raio-xl);
+  box-shadow: var(--sombra-lg);
+  border: 1px solid var(--borda-padrao);
+  animation: cartao-sobe 520ms var(--suavizacao, ease-out) both;
+}
+@keyframes cartao-sobe {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* marca pequena só aparece no mobile, quando a capa some */
+.formulario-login__marca {
+  display: none;
+  align-items: center;
+  gap: var(--esp-2);
+  font-weight: 800;
+  font-size: 1.2rem;
+  color: var(--cor-primaria);
+  margin-bottom: var(--esp-5);
+}
+.formulario-login__icone {
+  display: inline-flex;
+  width: 38px; height: 38px;
+  border-radius: 12px;
+  align-items: center; justify-content: center;
+  color: white;
+  background: linear-gradient(135deg, var(--cor-primaria), var(--cor-primaria-clara));
+}
+
+.formulario-login h1 { font-size: 1.7rem; margin: 0 0 var(--esp-2); }
+.formulario-login .legenda { color: var(--texto-secundario); margin-bottom: var(--esp-6); }
+
+.campo-senha { position: relative; display: flex; }
+.campo-senha input { flex: 1; padding-right: 2.75rem; }
+.campo-senha__alternar {
+  position: absolute;
+  right: 0.4rem; top: 50%;
+  transform: translateY(-50%);
+  width: 34px; height: 34px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 0; background: transparent;
+  color: var(--texto-suave);
+  border-radius: var(--raio-md);
+  cursor: pointer;
+  transition: color var(--transicao-rapida), background var(--transicao-rapida);
+}
+.campo-senha__alternar:hover { color: var(--cor-primaria); background: var(--fundo-sutil); }
+
+.formulario-login .botao {
+  width: 100%;
+  margin-top: var(--esp-2);
+  padding: 0.9rem;
+  font-size: 1rem;
+  border-radius: var(--raio-md);
+}
+
+.rodape-login {
+  margin-top: var(--esp-6);
+  font-size: 0.85rem;
+  color: var(--texto-suave);
+  text-align: center;
+  line-height: 1.5;
+}
+
+/* ----------- Responsivo (no fim, para vencer a cascata) ----------- */
+
+@media (max-width: 900px) {
+  .tela-login { grid-template-columns: 1fr; }
+  .tela-login__capa { display: none; }
+  .formulario-login__marca { display: flex; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .capa__brilho, .capa__pontos i, .formulario-login { animation: none !important; }
+}

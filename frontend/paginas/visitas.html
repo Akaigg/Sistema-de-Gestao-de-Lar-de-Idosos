@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Visitas — Cuidar+</title>
+  <link rel="stylesheet" href="/estatico/css/design-system.css">
+  <link rel="stylesheet" href="/estatico/css/layout.css">
+</head>
+<body>
+  <div id="raiz"></div>
+  <script type="module">
+    import { Api } from "/estatico/js/api.js";
+    import { montarLayout, notificar, escaparHTML, abrirModal, formatarDataHora, confirmar } from "/estatico/js/comum.js";
+
+    const area = montarLayout({ idPaginaAtiva: "visitas", titulo: "Visitas", subtitulo: "Controle de visitantes" });
+
+    let residentes = [], visitas = [];
+
+    async function carregar() {
+      [residentes, visitas] = await Promise.all([
+        Api.get("/api/residentes", { tamanho_pagina: 200 }).then(r => r.itens),
+        Api.get("/api/visitas"),
+      ]);
+      renderizar();
+    }
+
+    function renderizar() {
+      area.innerHTML = `
+        <div class="cartao">
+          <div class="cartao__cabecalho">
+            <h3>Visitas registradas (${visitas.length})</h3>
+            <button class="botao" id="btn-novo">+ Registrar entrada</button>
+          </div>
+          ${visitas.length === 0 ? "<p>Sem visitas.</p>" : `
+            <table class="tabela">
+              <thead><tr><th>Entrada</th><th>Visitante</th><th>Documento</th><th>Relação</th><th>Residente</th><th>Saída</th><th></th></tr></thead>
+              <tbody>${visitas.map(v => `
+                <tr>
+                  <td>${formatarDataHora(v.entrada_em)}</td>
+                  <td>${escaparHTML(v.nome_visitante)}</td>
+                  <td>${escaparHTML(v.documento_visitante)}</td>
+                  <td>${escaparHTML(v.parentesco_ou_relacao)}</td>
+                  <td>#${v.residente_id}</td>
+                  <td>${v.saida_em ? formatarDataHora(v.saida_em) : '<span class="pilula pilula--sucesso">Em visita</span>'}</td>
+                  <td>${!v.saida_em ? `<button class="botao botao--pequeno botao--secundario" data-enc="${v.identificador}">Registrar saída</button>` : ""}</td>
+                </tr>`).join("")}</tbody>
+            </table>`}
+        </div>
+      `;
+      document.getElementById("btn-novo").addEventListener("click", abrirNova);
+      area.querySelectorAll("[data-enc]").forEach(b => b.addEventListener("click", async () => {
+        if (!(await confirmar("Confirmar saída?"))) return;
+        try { await Api.post(`/api/visitas/${b.dataset.enc}/encerrar`); notificar("Saída registrada.", "sucesso"); carregar(); }
+        catch (e) { notificar(e.message, "perigo"); }
+      }));
+    }
+
+    async function abrirNova() {
+      await abrirModal({
+        titulo: "Registrar visita",
+        textoConfirmar: "Registrar",
+        conteudoHtml: `<form id="f">
+          <div class="campo"><label>Residente</label>
+            <select name="residente_id">${residentes.map(r => `<option value="${r.identificador}">${escaparHTML(r.nome_completo)}</option>`).join("")}</select>
+          </div>
+          <div class="grade grade-2">
+            <div class="campo"><label>Nome do visitante</label><input name="nome_visitante" required></div>
+            <div class="campo"><label>Documento</label><input name="documento_visitante" required></div>
+          </div>
+          <div class="campo"><label>Parentesco ou relação</label><input name="parentesco_ou_relacao" required></div>
+          <div class="campo"><label>Observações</label><textarea name="observacoes"></textarea></div>
+        </form>`,
+        aoConfirmar: async (f) => {
+          const dados = Object.fromEntries(new FormData(f.querySelector("#f")));
+          dados.residente_id = parseInt(dados.residente_id);
+          try { await Api.post("/api/visitas", dados); notificar("Visita registrada.", "sucesso"); carregar(); return true; }
+          catch (e) { notificar(e.message, "perigo"); return false; }
+        },
+      });
+    }
+
+    carregar();
+  </script>
+</body>
+</html>
