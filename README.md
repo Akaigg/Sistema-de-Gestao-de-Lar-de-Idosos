@@ -47,15 +47,14 @@ Veja [`docs/arquitetura.md`](docs/arquitetura.md) e os
 ```bash
 # 1. Crie um ambiente virtual
 python -m venv .venv
+source .venv/bin/activate
 .venv\Scripts\activate             # Windows
 
-# 2. Instale as dependências
 pip install -r backend/requirements.txt
 
-# 3. Crie o banco e o usuário administrador padrão
 python -m backend.scripts.inicializar_banco
 
-# 3b. (Opcional) Popule o banco com dados fictícios de demonstração
+# 3b.Popule o banco com dados fictícios de demonstração
 python -m backend.scripts.popular_dados_ficticios
 # Para apagar e repopular do zero: RECRIAR=1 python -m backend.scripts.popular_dados_ficticios
 
